@@ -32,7 +32,7 @@ By clicking "I Agree" and proceeding with the installation, you acknowledge that
 
 
 
-
+-----------
 
 [Setup]
 AppName=MySampleApp
@@ -140,7 +140,7 @@ end;
 
 
 
-
+----------
 
 [Setup]
 AppName=MySampleApp

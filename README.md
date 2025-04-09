@@ -1,275 +1,267 @@
-<div *ngFor="let item of formItems" class="form-group mb-3" [ngSwitch]="item.type">
+<!-- action button -->
+<div class="save-form-btn ml-5 flex-col">
+    <div>
+        <div class="mt-4">
+            <!-- <input type="text" [(ngModel)]="formLinkInput" placeholder="Enter the form link" class="w-full rounded border p-2" /> -->
 
-  <!-- Text Field -->
-  <ng-container *ngSwitchCase="'text'">
-    <label class="block text-gray-700">{{ item.label }}</label>
-    <input
-      [type]="item.type"
-      [placeholder]="item.placeholder"
-      [ngStyle]="{
-        'font-size': item.fontSize,
-        color: item.fontColor,
-        'font-family': item.fontFamily,
-        'font-weight': item.fontWeight,
-        'border-style': item.borderStyle,
-        padding: item.padding,
-        'background-color': item.bgColor
-      }"
-      class="form-control mt-2 w-full rounded-lg border border-gray-300 p-3 shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-    />
-  </ng-container>
+            @for (link of formslinks; track link; let idx = $index) {
+                <div>
+                    <a
+                        class="cursor-pointer text-xl text-blue-900"
+                        (click)="showforms(link.row_id)"
+                        >Form- {{ idx + 1 }}
+                    </a>
+                </div>
+            }
+        </div>
 
-  <!-- Button -->
-  <ng-container *ngSwitchCase="'button'">
-    <button
-      type="button"
-      [ngStyle]="{
-        'font-size': item.fontSize,
-        color: item.fontColor,
-        'font-weight': item.fontWeight,
-        'background-color': item.bgColor,
-        width: item.width,
-        height: item.height
-      }"
-      class="mt-2 rounded-lg shadow-md focus:outline-none"
-    >
-      {{ item.label }}
-    </button>
-  </ng-container>
+        <div class="mt-4">
+            <button (click)="loadForm()">Load Form</button>
+        </div>
+    </div>
 
-  <!-- Unsupported fallback -->
-  <ng-container *ngSwitchDefault>
-    <p class="text-red-500">Unsupported element type: {{ item.type }}</p>
-  </ng-container>
+    <div class="mt-4">
+        <button (click)="newForm()">New Form</button>
+    </div>
 </div>
 
+<!-- Form Preview Section -->
+<app-form-preview
+    [formItems]="formItems"
+    [forms_row_id]="forms_row_id"
+></app-form-preview>
 
+<div>
+    <h1>Total response : {{ forms_response_numbers }}</h1>
 
+    <!-- @for(data of formdata;track data; let idx = $index){
+        <div>
+            <a class="text-blue-900 text-xl cursor-pointer" > {{data.form_data | json}} </a>
+        </div>
+        } -->
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<div *ngFor="let item of formItems" class="form-group mb-4" [ngSwitch]="item.type">
-
-  <!-- Label for all (except button) -->
-  <label *ngIf="item.type !== 'button'" class="block mb-1 text-gray-700">
-    {{ item.label }}
-  </label>
-
-  <!-- Text Input -->
-  <input
-    *ngSwitchCase="'text'"
-    type="text"
-    [placeholder]="item.placeholder"
-    [ngStyle]="getStyles(item)"
-    class="form-control w-full rounded-lg border border-gray-300 p-3 shadow-sm"
-  />
-
-  <!-- Email -->
-  <input
-    *ngSwitchCase="'email'"
-    type="email"
-    [placeholder]="item.placeholder"
-    [ngStyle]="getStyles(item)"
-    class="form-control w-full rounded-lg border border-gray-300 p-3 shadow-sm"
-  />
-
-  <!-- Password -->
-  <input
-    *ngSwitchCase="'password'"
-    type="password"
-    [placeholder]="item.placeholder"
-    [ngStyle]="getStyles(item)"
-    class="form-control w-full rounded-lg border border-gray-300 p-3 shadow-sm"
-  />
-
-  <!-- Textarea -->
-  <textarea
-    *ngSwitchCase="'textarea'"
-    [placeholder]="item.placeholder"
-    [ngStyle]="getStyles(item)"
-    class="w-full rounded-lg border border-gray-300 p-3 shadow-sm"
-  ></textarea>
-
-  <!-- Select -->
-  <select
-    *ngSwitchCase="'select'"
-    [ngStyle]="getStyles(item)"
-    class="w-full rounded-lg border border-gray-300 p-3 shadow-sm"
-  >
-    <option *ngFor="let opt of item.options">{{ opt }}</option>
-  </select>
-
-  <!-- Radio Group -->
-  <div *ngSwitchCase="'radio'" [ngStyle]="getStyles(item)">
-    <label
-      *ngFor="let opt of item.options"
-      class="mr-4 inline-flex items-center"
+    <table
+        mat-table
+        [dataSource]="formSubdata"
+        class="mat-elevation-z8 w-full min-w-[600px]"
     >
-      <input type="radio" name="{{ item.label }}" class="mr-2" /> {{ opt }}
-    </label>
-  </div>
+        <!-- Dynamic Column Definitions -->
+        <ng-container
+            *ngFor="let column of displayedColumns"
+            [matColumnDef]="column"
+        >
+            <th mat-header-cell *matHeaderCellDef class="text-left capitalize">
+                {{ column }}
+            </th>
 
-  <!-- Checkbox Group -->
-  <div *ngSwitchCase="'checkbox-group'" [ngStyle]="getStyles(item)">
-    <label
-      *ngFor="let opt of item.options"
-      class="mr-4 inline-flex items-center"
-    >
-      <input type="checkbox" class="mr-2" /> {{ opt }}
-    </label>
-  </div>
+            <td mat-cell *matCellDef="let row">
+                <!-- Special case for ID (index based) -->
+                <ng-container *ngIf="column === 'form_row_id'; else otherField">
+                    {{ formSubdata.indexOf(row) + 1 }}
+                </ng-container>
 
-  <!-- Single Checkbox -->
-  <label *ngSwitchCase="'checkbox'" class="inline-flex items-center space-x-2">
-    <input
-      type="checkbox"
-      [ngStyle]="getStyles(item)"
-      class="form-checkbox h-5 w-5 text-blue-600"
-    />
-    <span [ngStyle]="getStyles(item)">{{ item.label }}</span>
-  </label>
+                <!-- Other dynamic fields -->
+                <ng-template #otherField>
+                    {{ row.form_data[column] }}
+                </ng-template>
+            </td>
+        </ng-container>
 
-  <!-- Date -->
-  <input
-    *ngSwitchCase="'date'"
-    type="date"
-    [ngStyle]="getStyles(item)"
-    class="form-control w-full rounded-lg border border-gray-300 p-3 shadow-sm"
-  />
+        <!-- Table Header & Rows -->
+        <tr
+            mat-header-row
+            *matHeaderRowDef="displayedColumns"
+            class="bg-gray-200 text-sm font-bold md:text-lg"
+        ></tr>
 
-  <!-- File -->
-  <input
-    *ngSwitchCase="'file'"
-    type="file"
-    [ngStyle]="getStyles(item)"
-    class="w-full border p-2"
-  />
-
-  <!-- Button -->
-  <button
-    *ngSwitchCase="'button'"
-    type="button"
-    [ngStyle]="{
-      'font-size': item.fontSize,
-      color: item.fontColor,
-      'font-weight': item.fontWeight,
-      'background-color': item.bgColor,
-      width: item.width,
-      height: item.height
-    }"
-    class="rounded-lg px-4 py-2 shadow-md"
-  >
-    {{ item.label }}
-  </button>
-
-  <!-- Fallback -->
-  <p *ngSwitchDefault class="text-red-500">
-    Unsupported element type: {{ item.type }}
-  </p>
+        <tr
+            mat-row
+            *matRowDef="let row; columns: displayedColumns"
+            class="cursor-pointer transition hover:bg-blue-100"
+        ></tr>
+    </table>
 </div>
+import { Component, inject } from '@angular/core';
+import { FormPreviewComponent } from '../../components/form-preview/form-preview.component';
+import { ApicontrollerService } from 'app/controller/apicontroller.service';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { CommonModule, NgFor } from '@angular/common';
+import { DragDropModule } from '@angular/cdk/drag-drop';
+import { FormsModule } from '@angular/forms';
+import { MatInputModule } from '@angular/material/input';
+import { MatIconModule } from '@angular/material/icon';
+import { FormBuilderAreaComponent } from '../../components/form-builder-area/form-builder-area.component';
+import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 
 
+interface FormElement {
+  type: string;
+  label: string;
+  placeholder?: string;
+  rows?: any;
+  cols?: any
+  min?: any
+  max?: any
+  optionsdropdown?: Array<{ label: string, value: string }>;// Dropdown options,
+  optionsradio?: Array<{ label: string, value: string }>;
+  optionscheckbox?: Array<{ label: string, value: string }>
+  layout?: 'vertical' | 'horizontal';
+  required?: boolean;
+  address?:any[];
+  accept?:string;
+  key?:any;
+  searchText?:any;
+  filteredOptions?:any;
+    
 
 
+}
 
 
+interface formdata{
+  form_data:any
+}
 
-availableElements: FormElement[] = [
-  {
-    type: 'text',
-    label: 'Text Field',
-    placeholder: 'Enter text',
-    fontSize: '14px',
-    fontColor: '#000000'
-  },
-  {
-    type: 'email',
-    label: 'Email Address',
-    placeholder: 'example@mail.com',
-    fontSize: '14px',
-    fontColor: '#000000'
-  },
-  {
-    type: 'password',
-    label: 'Password',
-    placeholder: 'Enter password',
-    fontSize: '14px',
-    fontColor: '#000000'
-  },
-  {
-    type: 'textarea',
-    label: 'Message',
-    placeholder: 'Write something...',
-    fontSize: '14px',
-    fontColor: '#000000'
-  },
-  {
-    type: 'select',
-    label: 'Select Option',
-    options: ['Option 1', 'Option 2', 'Option 3'],
-    fontSize: '14px',
-    fontColor: '#000000'
-  },
-  {
-    type: 'radio',
-    label: 'Choose Gender',
-    options: ['Male', 'Female', 'Other'],
-    fontSize: '14px',
-    fontColor: '#000000'
-  },
-  {
-    type: 'checkbox',
-    label: 'I agree to the terms',
-    fontSize: '14px',
-    fontColor: '#000000'
-  },
-  {
-    type: 'checkbox-group',
-    label: 'Skills',
-    options: ['Angular', 'Node.js', 'PostgreSQL'],
-    fontSize: '14px',
-    fontColor: '#000000'
-  },
-  {
-    type: 'date',
-    label: 'Pick a Date',
-    fontSize: '14px',
-    fontColor: '#000000'
-  },
-  {
-    type: 'file',
-    label: 'Upload Resume',
-    fontSize: '14px',
-    fontColor: '#000000'
-  },
-  {
-    type: 'button',
-    label: 'Submit',
-    bgColor: '#007bff',
-    fontColor: '#ffffff',
-    fontSize: '16px',
-    fontWeight: 'bold',
-    width: '120px',
-    height: '45px'
+
+interface FormsSchemaData {
+  // forms_row_id:any;
+  form_link: any;
+}
+
+@Component({
+  selector: 'app-form-priview',
+  imports: [
+    DragDropModule,
+    CommonModule,
+    FormsModule,
+    MatInputModule,
+    MatIconModule,
+    FormPreviewComponent,
+    MatTableModule
+
+  ],
+  templateUrl: './form-priview.component.html',
+  styleUrl: './form-priview.component.scss'
+})
+export class FormPriviewComponent {
+
+    private _snackBar = inject(MatSnackBar);
+  
+
+   // Dropped elements in the form builder
+   formItems: FormElement[] = [];
+
+   formslinks: FormsSchemaData[];
+  //  forms_row_id: FormsSchemaData[];
+
+
+   formLinkInput: string;
+
+   forms_row_id:string;
+
+   forms_response_numbers:string;
+
+  formSubdata:formdata[] =[]; // Use MatTableDataSource for pagination
+   
+
+   constructor(
+       private Apicontroller: ApicontrollerService
+     ) {
+     }
+
+    //  displayedColumns: any[] = [
+    //   'form_row_id',
+    //   'form_sub_data',   
+    //   'phone',
+    //   'username',
+    //   'textField',
+    //   // 'emailField',
+    //   'phoneNumber',
+    //   // 'description'
+
+
+     
+    // ];
+
+    displayedColumns:any[];
+
+
+    async formsdatasub(){
+      const formsubresponse = await this.Apicontroller.showFormresponse(this.forms_row_id)
+      console.log("formsubresponse -->",formsubresponse)
+      console.log("response form_data",formsubresponse)
+      this.formSubdata = formsubresponse
+      
+      console.log("form res data of header",Object.keys(this.formSubdata[0].form_data))
+
+      this.displayedColumns = Object.keys(this.formSubdata[0].form_data)
+
+      console.log("disp",this.displayedColumns)
+  
+      console.log("forms data ",this.formSubdata)
+    }
+
+  /**
+     * load forms (backend side).
+     */
+
+  async loadForm() {
+
+    const resp = await this.Apicontroller.loadallForms();
+    this.formslinks = resp as FormsSchemaData[]; // Type assert to Doctor[]
+    // this.forms_row_id = resp as FormsSchemaData[]; // Type assert to Doctor[]
+
+    console.log("resp---", resp)
+//    console.log("formslinks ---", this.forms_row_id)
+
   }
-];
 
+
+  /**
+   * new design window
+   */
+
+  newForm() {
+    this.formItems = [];
+  }
+
+
+  formdata =[]
+
+
+  async showforms(link: any) {
+    console.log("row id ", link)
+
+    this.forms_row_id = link
+
+    const formsubresponseCount = await this.Apicontroller.showFormresponseCount(this.forms_row_id)
+    console.log("formsubresponse count -->",formsubresponseCount)
+    this.forms_response_numbers = formsubresponseCount
+
+
+    // const formsubresponse = await this.Apicontroller.showFormresponse(this.forms_row_id)
+    // console.log("formsubresponse -->",formsubresponse)
+    // console.log("response form_data",formsubresponse)
+    // this.formdata = formsubresponse
+
+    // console.log("forms data ",this.formdata)
+
+    this.formsdatasub()
+
+
+
+
+
+
+    const resp = await this.Apicontroller.loadForms(link);
+    console.log("resp", resp[0].form_data)
+    this.formItems = resp[0].form_data;
+  }
+
+
+
+  
+
+
+
+}

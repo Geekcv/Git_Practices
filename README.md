@@ -1,267 +1,397 @@
-<!-- action button -->
-<div class="save-form-btn ml-5 flex-col">
-    <div>
-        <div class="mt-4">
-            <!-- <input type="text" [(ngModel)]="formLinkInput" placeholder="Enter the form link" class="w-full rounded border p-2" /> -->
+async function fetchCenterWiseStudents(req, res) {
+  try {
+    const {
+      from_date,
+      to_date,
+      exam_sessions,
+      center,
+      gender,
+      state,
+      city,
+      roll_no,
+      orderby,
+    } = req.data;
 
-            @for (link of formslinks; track link; let idx = $index) {
-                <div>
-                    <a
-                        class="cursor-pointer text-xl text-blue-900"
-                        (click)="showforms(link.row_id)"
-                        >Form- {{ idx + 1 }}
-                    </a>
-                </div>
-            }
-        </div>
+    // CASE 1: Filter by State or City
+    if (state || city) {
+      const orConditions = {};
+      if (exam_sessions)
+        orConditions[`${schema}.students.exam_sessions`] = exam_sessions;
+      if (state) orConditions[`${schema}.students.state`] = state;
+      if (city) orConditions[`${schema}.students.city`] = city;
 
-        <div class="mt-4">
-            <button (click)="loadForm()">Load Form</button>
-        </div>
-    </div>
+      const parameters = {
+        tablename: students,
+        data: [
+          `${students}.student_name`,
+          `${students}.father_name`,
+          `${students}.state`,
+          `${students}.city`,
+          `${students}.roll_no`,
+          `${classes}.class_name`,
+        ],
+        cond: Object.keys(orConditions).length ? { AND: orConditions } : null,
+        joins: [
+          {
+            jointype: "inner",
+            tables: [
+              { tb: students, on: "center" },
+              { tb: centers, on: "row_id" },
+            ],
+          },
+          {
+            jointype: "inner",
+            tables: [
+              { tb: students, on: "class_id" },
+              { tb: classes, on: "row_id" },
+            ],
+          },
+        ],
+      };
 
-    <div class="mt-4">
-        <button (click)="newForm()">New Form</button>
-    </div>
-</div>
+      const studentResp = await query.select_query(parameters);
 
-<!-- Form Preview Section -->
-<app-form-preview
-    [formItems]="formItems"
-    [forms_row_id]="forms_row_id"
-></app-form-preview>
+      if (!studentResp?.length) {
+        return libFunc.sendResponse(res, {
+          status: 1,
+          msg: "No students found for the given state/city filters.",
+          data: [],
+        });
+      }
 
-<div>
-    <h1>Total response : {{ forms_response_numbers }}</h1>
-
-    <!-- @for(data of formdata;track data; let idx = $index){
-        <div>
-            <a class="text-blue-900 text-xl cursor-pointer" > {{data.form_data | json}} </a>
-        </div>
-        } -->
-
-    <table
-        mat-table
-        [dataSource]="formSubdata"
-        class="mat-elevation-z8 w-full min-w-[600px]"
-    >
-        <!-- Dynamic Column Definitions -->
-        <ng-container
-            *ngFor="let column of displayedColumns"
-            [matColumnDef]="column"
-        >
-            <th mat-header-cell *matHeaderCellDef class="text-left capitalize">
-                {{ column }}
-            </th>
-
-            <td mat-cell *matCellDef="let row">
-                <!-- Special case for ID (index based) -->
-                <ng-container *ngIf="column === 'form_row_id'; else otherField">
-                    {{ formSubdata.indexOf(row) + 1 }}
-                </ng-container>
-
-                <!-- Other dynamic fields -->
-                <ng-template #otherField>
-                    {{ row.form_data[column] }}
-                </ng-template>
-            </td>
-        </ng-container>
-
-        <!-- Table Header & Rows -->
-        <tr
-            mat-header-row
-            *matHeaderRowDef="displayedColumns"
-            class="bg-gray-200 text-sm font-bold md:text-lg"
-        ></tr>
-
-        <tr
-            mat-row
-            *matRowDef="let row; columns: displayedColumns"
-            class="cursor-pointer transition hover:bg-blue-100"
-        ></tr>
-    </table>
-</div>
-import { Component, inject } from '@angular/core';
-import { FormPreviewComponent } from '../../components/form-preview/form-preview.component';
-import { ApicontrollerService } from 'app/controller/apicontroller.service';
-import { MatSnackBar } from '@angular/material/snack-bar';
-import { CommonModule, NgFor } from '@angular/common';
-import { DragDropModule } from '@angular/cdk/drag-drop';
-import { FormsModule } from '@angular/forms';
-import { MatInputModule } from '@angular/material/input';
-import { MatIconModule } from '@angular/material/icon';
-import { FormBuilderAreaComponent } from '../../components/form-builder-area/form-builder-area.component';
-import { MatTableDataSource, MatTableModule } from '@angular/material/table';
-
-
-interface FormElement {
-  type: string;
-  label: string;
-  placeholder?: string;
-  rows?: any;
-  cols?: any
-  min?: any
-  max?: any
-  optionsdropdown?: Array<{ label: string, value: string }>;// Dropdown options,
-  optionsradio?: Array<{ label: string, value: string }>;
-  optionscheckbox?: Array<{ label: string, value: string }>
-  layout?: 'vertical' | 'horizontal';
-  required?: boolean;
-  address?:any[];
-  accept?:string;
-  key?:any;
-  searchText?:any;
-  filteredOptions?:any;
-    
-
-
-}
-
-
-interface formdata{
-  form_data:any
-}
-
-
-interface FormsSchemaData {
-  // forms_row_id:any;
-  form_link: any;
-}
-
-@Component({
-  selector: 'app-form-priview',
-  imports: [
-    DragDropModule,
-    CommonModule,
-    FormsModule,
-    MatInputModule,
-    MatIconModule,
-    FormPreviewComponent,
-    MatTableModule
-
-  ],
-  templateUrl: './form-priview.component.html',
-  styleUrl: './form-priview.component.scss'
-})
-export class FormPriviewComponent {
-
-    private _snackBar = inject(MatSnackBar);
-  
-
-   // Dropped elements in the form builder
-   formItems: FormElement[] = [];
-
-   formslinks: FormsSchemaData[];
-  //  forms_row_id: FormsSchemaData[];
-
-
-   formLinkInput: string;
-
-   forms_row_id:string;
-
-   forms_response_numbers:string;
-
-  formSubdata:formdata[] =[]; // Use MatTableDataSource for pagination
-   
-
-   constructor(
-       private Apicontroller: ApicontrollerService
-     ) {
-     }
-
-    //  displayedColumns: any[] = [
-    //   'form_row_id',
-    //   'form_sub_data',   
-    //   'phone',
-    //   'username',
-    //   'textField',
-    //   // 'emailField',
-    //   'phoneNumber',
-    //   // 'description'
-
-
-     
-    // ];
-
-    displayedColumns:any[];
-
-
-    async formsdatasub(){
-      const formsubresponse = await this.Apicontroller.showFormresponse(this.forms_row_id)
-      console.log("formsubresponse -->",formsubresponse)
-      console.log("response form_data",formsubresponse)
-      this.formSubdata = formsubresponse
-      
-      console.log("form res data of header",Object.keys(this.formSubdata[0].form_data))
-
-      this.displayedColumns = Object.keys(this.formSubdata[0].form_data)
-
-      console.log("disp",this.displayedColumns)
-  
-      console.log("forms data ",this.formSubdata)
+      return libFunc.sendResponse(res, {
+        status: 0,
+        msg: "Students filtered by state or city fetched successfully.",
+        data: studentResp,
+      });
     }
 
-  /**
-     * load forms (backend side).
-     */
+    // CASE 2: Filter by Roll Number
+    else if (roll_no) {
+      const cond = {
+        AND: {
+          [`${students}.exam_sessions`]: exam_sessions,
+          [`${students}.center`]: center,
+          [`${students}.roll_no`]: roll_no,
+        },
+      };
 
-  async loadForm() {
+      const parameters = {
+        tablename: students,
+        data: [
+          `${students}.student_name`,
+          `${students}.father_name`,
+          `${students}.address`,
+          `${classes}.class_name`,
+          `${students}.gender`,
+          `${students}.roll_no`,
+          `${students}.center`,
+          `${centers}.center as center_name`,
+          `${examSessions}.exam_date`,
+        ],
+        cond: cond,
+        joins: [
+          {
+            jointype: "inner",
+            tables: [
+              { tb: students, on: "center" },
+              { tb: centers, on: "row_id" },
+            ],
+          },
+          {
+            jointype: "inner",
+            tables: [
+              { tb: students, on: "class_id" },
+              { tb: classes, on: "row_id" },
+            ],
+          },
+          {
+            jointype: "inner",
+            tables: [
+              { tb: students, on: "exam_sessions" },
+              { tb: examSessions, on: "row_id" },
+            ],
+          },
+        ],
+      };
 
-    const resp = await this.Apicontroller.loadallForms();
-    this.formslinks = resp as FormsSchemaData[]; // Type assert to Doctor[]
-    // this.forms_row_id = resp as FormsSchemaData[]; // Type assert to Doctor[]
+      const studentResp = await query.select_query(parameters);
 
-    console.log("resp---", resp)
-//    console.log("formslinks ---", this.forms_row_id)
+      if (!studentResp?.length) {
+        return libFunc.sendResponse(res, {
+          status: 1,
+          msg: "No student found for the given roll number.",
+          data: [],
+        });
+      }
 
+      return libFunc.sendResponse(res, {
+        status: 0,
+        msg: "Student details fetched successfully for the admission card.",
+        data: studentResp,
+      });
+    }
+
+    // CASE 3: Ordered Result
+    else if (orderby) {
+      let orderClause = { [`${students}.roll_no`]: "asc" };
+
+      if (orderby === "name") {
+        orderClause = {
+          [`${students}.student_name`]: "asc",
+          [`${classes}.class_name`]: "asc",
+        };
+      } else if (orderby === "roll_no") {
+        orderClause = {
+          [`${students}.roll_no`]: "asc",
+          [`${classes}.class_name`]: "asc",
+        };
+      } else if (orderby === "both") {
+        orderClause = {
+          [`${students}.roll_no`]: "asc",
+          [`${students}.student_name`]: "asc",
+        };
+      }
+
+      const cond = {
+        AND: {
+          [`${students}.exam_sessions`]: exam_sessions,
+          [`${students}.center`]: center,
+        },
+      };
+
+      if (gender) cond.AND[`${students}.gender`] = gender;
+
+      const parameters = {
+        tablename: students,
+        data: [
+          `${students}.student_name`,
+          `${students}.father_name`,
+          `${students}.address`,
+          `${classes}.class_name`,
+          `${students}.gender`,
+          `${students}.roll_no`,
+          `${students}.center`,
+          `${centers}.center as center_name`,
+        ],
+        cond: cond,
+        orderby: orderClause,
+        joins: [
+          {
+            jointype: "inner",
+            tables: [
+              { tb: students, on: "center" },
+              { tb: centers, on: "row_id" },
+            ],
+          },
+          {
+            jointype: "inner",
+            tables: [
+              { tb: students, on: "class_id" },
+              { tb: classes, on: "row_id" },
+            ],
+          },
+        ],
+      };
+
+      const studentResp = await query.select_query(parameters);
+
+      if (!studentResp?.length) {
+        return libFunc.sendResponse(res, {
+          status: 1,
+          msg: "No students found for the given ordering filters.",
+          data: [],
+        });
+      }
+
+      const countResp = await query.select_query({
+        tablename: students,
+        data: ["COUNT(*) AS total_students"],
+        cond: cond,
+      });
+
+      return libFunc.sendResponse(res, {
+        status: 0,
+        msg: "Ordered students fetched successfully.",
+        total_students: countResp[0]?.total_students || 0,
+        data: studentResp,
+      });
+    }
+
+    // CASE 4: Default Case - Date Filter or Gender
+    else {
+      const queryStr = `
+        SELECT 
+          ${schema}.students.student_name,
+          ${schema}.students.father_name,
+          ${schema}.students.address,
+          ${schema}.classes.class_name,
+          ${schema}.students.gender,
+          ${schema}.students.roll_no,
+          ${schema}.students.center,
+          ${schema}.centers.center AS center_name
+        FROM ${schema}.students
+        INNER JOIN ${schema}.centers ON ${schema}.students.center = ${schema}.centers.row_id
+        INNER JOIN ${schema}.classes ON ${schema}.students.class_id = ${schema}.classes.row_id
+        WHERE 
+          ${schema}.students.exam_sessions = '${exam_sessions}' AND 
+          ${schema}.students.center = '${center}' AND 
+          ${schema}.students.gender = '${gender}' AND
+          ${schema}.students.cr_on BETWEEN '${from_date}' AND '${to_date}';
+      `;
+
+      const studentResp = await query.custom_query(queryStr);
+
+      if (!studentResp?.length) {
+        return libFunc.sendResponse(res, {
+          status: 1,
+          msg: "No students found for the given date and gender filters.",
+          data: [],
+        });
+      }
+
+      return libFunc.sendResponse(res, {
+        status: 0,
+        msg: "Students filtered by date and gender fetched successfully.",
+        data: studentResp,
+      });
+    }
+  } catch (error) {
+    console.error("Error fetching center-wise students:", error);
+    return libFunc.sendResponse(res, {
+      status: 1,
+      msg: "Unexpected error occurred while fetching student records.",
+      error: error.message,
+    });
   }
-
-
-  /**
-   * new design window
-   */
-
-  newForm() {
-    this.formItems = [];
-  }
-
-
-  formdata =[]
-
-
-  async showforms(link: any) {
-    console.log("row id ", link)
-
-    this.forms_row_id = link
-
-    const formsubresponseCount = await this.Apicontroller.showFormresponseCount(this.forms_row_id)
-    console.log("formsubresponse count -->",formsubresponseCount)
-    this.forms_response_numbers = formsubresponseCount
-
-
-    // const formsubresponse = await this.Apicontroller.showFormresponse(this.forms_row_id)
-    // console.log("formsubresponse -->",formsubresponse)
-    // console.log("response form_data",formsubresponse)
-    // this.formdata = formsubresponse
-
-    // console.log("forms data ",this.formdata)
-
-    this.formsdatasub()
-
-
-
-
-
-
-    const resp = await this.Apicontroller.loadForms(link);
-    console.log("resp", resp[0].form_data)
-    this.formItems = resp[0].form_data;
-  }
-
-
-
-  
-
-
-
 }
+
+
+async function fetchStudentMarksReports(req, res) {
+  try {
+    const { exam_session, bandal_no, class_id, center, marksfrom, marksto } = req.data;
+
+    // Validate required fields
+    if (!exam_session) {
+      return libFunc.sendResponse(res, {
+        status: 1,
+        msg: "Missing required field: exam_session",
+      });
+    }
+
+    let studentResp;
+
+    // If bandal_no is provided, fetch by bandal_no
+    if (bandal_no) {
+      const cond = {
+        AND: {
+          [`${bandals}.exam_session`]: exam_session,
+          [`${bandals}.bandal_no`]: bandal_no,
+        },
+      };
+
+      const parameters = {
+        tablename: bandals,
+        data: [
+          `${students}.roll_no`,
+          "bandal_no",
+          "class_name",
+          "marks",
+          `${copyCheckers}.name as copy_checker`,
+        ],
+        cond: cond,
+        joins: [
+          {
+            jointype: "inner",
+            tables: [
+              { tb: bandals, on: "student_row_id" },
+              { tb: students, on: "row_id" },
+            ],
+          },
+          {
+            jointype: "inner",
+            tables: [
+              { tb: bandals, on: "class" },
+              { tb: classes, on: "row_id" },
+            ],
+          },
+          {
+            jointype: "inner",
+            tables: [
+              { tb: bandals, on: "copy_checker_id" },
+              { tb: copyCheckers, on: "row_id" },
+            ],
+          },
+          {
+            jointype: "inner",
+            tables: [
+              { tb: bandals, on: "student_row_id" },
+              { tb: markstable, on: "student_row_id" },
+            ],
+          },
+        ],
+      };
+
+      studentResp = await query.select_query(parameters);
+    } 
+    // Else fetch by filter range
+    else {
+      // Validate required filters
+      if (!center || !class_id || marksfrom === undefined || marksto === undefined) {
+        return libFunc.sendResponse(res, {
+          status: 1,
+          msg: "Missing required fields for marks range filtering: center, class_id, marksfrom, marksto",
+        });
+      }
+
+      const fetchFilterMarks = `
+        SELECT 
+          ${students}.roll_no,
+          bandal_no,
+          class_name,
+          ${copyCheckers}.name as copy_checker,
+          marks
+        FROM ${bandals}
+        INNER JOIN ${students} ON ${bandals}.student_row_id = ${students}.row_id
+        INNER JOIN ${classes} ON ${bandals}.class = ${classes}.row_id
+        INNER JOIN ${copyCheckers} ON ${bandals}.copy_checker_id = ${copyCheckers}.row_id
+        INNER JOIN ${markstable} ON ${bandals}.student_row_id = ${markstable}.student_row_id
+        INNER JOIN ${centers} ON ${students}.center = ${centers}.row_id
+        WHERE 
+          ${bandals}.exam_session = '${exam_session}'
+          AND ${students}.center = '${center}'
+          AND ${bandals}.class = '${class_id}'
+          AND marks BETWEEN ${marksfrom} AND ${marksto};
+      `;
+
+      studentResp = await query.custom_query(fetchFilterMarks);
+    }
+
+    if (!studentResp || studentResp.length === 0) {
+      return libFunc.sendResponse(res, {
+        status: 1,
+        msg: "No student marks found with the given filters.",
+        data: [],
+      });
+    }
+
+    const resp = {
+      status: 0,
+      msg: "Student marks report fetched successfully.",
+      data: studentResp,
+    };
+
+    console.log("Marks Report:", resp);
+    libFunc.sendResponse(res, resp);
+
+  } catch (error) {
+    console.error("Error fetching student marks report:", error);
+    libFunc.sendResponse(res, {
+      status: 1,
+      msg: "An unexpected error occurred while fetching student marks report.",
+      error: error.message,
+    });
+  }
+}
+
+

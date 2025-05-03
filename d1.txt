@@ -1,0 +1,500 @@
+async function fetchOrderedStudents(req, res) {
+  const {
+    exam_sessions,
+    center,
+    gender,
+    orderby
+  } = req.data;
+
+  // exam_sessions is mandatory
+  if (!exam_sessions) {
+    return libFunc.sendResponse(res, {
+      status: 1,
+      msg: "exam_sessions is required.",
+      data: [],
+    });
+  }
+
+  // Default order clause
+  let orderClause = {
+    [`${students}.roll_no`]: "asc"
+  };
+
+  if (orderby === "name") {
+    orderClause = {
+      [`${students}.student_name`]: "asc",
+      [`${classes}.class_name`]: "asc",
+    };
+  } else if (orderby === "roll_no") {
+    orderClause = {
+      [`${students}.roll_no`]: "asc",
+      [`${classes}.class_name`]: "asc",
+    };
+  } else if (orderby === "All") {
+    orderClause = {
+      [`${students}.roll_no`]: "asc",
+      [`${students}.student_name`]: "asc",
+    };
+  }
+
+  // Building condition
+  const cond = {
+    AND: {
+      [`${students}.exam_sessions`]: exam_sessions,
+    },
+  };
+
+  if (center) {
+    cond.AND[`${students}.center`] = center;
+  }
+
+  if (gender && gender !== "All") {
+    cond.AND[`${students}.gender`] = gender === "Female" ? "f" : "m";
+  }
+
+  const parameters = {
+    tablename: students,
+    data: [
+      `${students}.student_name`,
+      `${students}.father_name`,
+      `${students}.address`,
+      `${students}.dob`,
+      `${students}.mobile_no`,
+      `${students}.ahhar_no`,
+      `${students}.account_no`,
+      `${students}.account_name`,
+      `${students}.bank_name`,
+      `${students}.ifsc_code`,
+      `${classes}.class_name`,
+      `${students}.gender`,
+      `${students}.roll_no`,
+      `${students}.center`,
+      `${centers}.center as center_name`,
+    ],
+    cond,
+    orderby: orderClause,
+    joins: [
+      {
+        jointype: "inner",
+        tables: [
+          { tb: students, on: "center" },
+          { tb: centers, on: "row_id" },
+        ],
+      },
+      {
+        jointype: "inner",
+        tables: [
+          { tb: students, on: "class_id" },
+          { tb: classes, on: "row_id" },
+        ],
+      },
+    ],
+  };
+
+  const studentResp = await query.select_query(parameters);
+  if (!studentResp || studentResp.length === 0) {
+    return libFunc.sendResponse(res, {
+      status: 1,
+      msg: "No students found for the given filters.",
+      data: [],
+    });
+  }
+
+  // Total student count
+  const countParameters = {
+    tablename: students,
+    data: ["COUNT(*) AS total_students"],
+    cond,
+  };
+  const countResp = await query.select_query(countParameters);
+
+  // Class-wise count
+  const classWiseCountParams = {
+    tablename: students,
+    data: [
+      `${classes}.class_name`,
+      `COUNT(${students}.row_id) AS total_students`,
+    ],
+    cond,
+    groupby: [`${classes}.class_name`],
+    joins: [
+      {
+        jointype: "inner",
+        tables: [
+          { tb: students, on: "class_id" },
+          { tb: classes, on: "row_id" },
+        ],
+      },
+    ],
+  };
+  const classWiseCount = await query.select_query(classWiseCountParams);
+
+  return libFunc.sendResponse(res, {
+    status: 0,
+    msg: "Ordered students fetched successfully.",
+    data: studentResp,
+    class_wise_count: classWiseCount,
+    all_students_count: countResp[0]?.total_students || 0,
+  });
+}
+
+
+async function fetchStudentsByStateOrCity(req, res) {
+  const { exam_sessions, state, city } = req.data;
+
+  // Validate required field
+  if (!exam_sessions) {
+    return libFunc.sendResponse(res, {
+      status: 1,
+      msg: "exam_sessions is required.",
+      data: [],
+    });
+  }
+
+  // Build dynamic condition
+  const cond = {
+    AND: {
+      [`${students}.exam_sessions`]: exam_sessions,
+    },
+  };
+
+  if (state) {
+    cond.AND[`${students}.state`] = state;
+  }
+
+  if (city) {
+    cond.AND[`${students}.city`] = city;
+  }
+
+  const parameters = {
+    tablename: students,
+    data: [
+      `${students}.student_name`,
+      `${students}.father_name`,
+      `${students}.state`,
+      `${students}.city`,
+      `${students}.account_no`,
+      `${students}.account_name`,
+      `${students}.bank_name`,
+      `${students}.ifsc_code`,
+      `${students}.address`,
+      `${students}.mobile_no`,
+      `${students}.education`,
+      `${students}.roll_no`,
+      `${classes}.class_name`,
+    ],
+    cond,
+    joins: [
+      {
+        jointype: "inner",
+        tables: [
+          { tb: students, on: "center" },
+          { tb: centers, on: "row_id" },
+        ],
+      },
+      {
+        jointype: "inner",
+        tables: [
+          { tb: students, on: "class_id" },
+          { tb: classes, on: "row_id" },
+        ],
+      },
+    ],
+  };
+
+  const studentResp = await query.select_query(parameters);
+  if (!studentResp || studentResp.length === 0) {
+    return libFunc.sendResponse(res, {
+      status: 1,
+      msg: "No students found for the given state/city filters.",
+      data: [],
+    });
+  }
+
+  return libFunc.sendResponse(res, {
+    status: 0,
+    msg: "Students filtered by state or city fetched successfully.",
+    data: studentResp,
+  });
+}
+
+
+async function fetchStudentsByDate(req, res) {
+  const { from_date, to_date, exam_sessions, center, gender } = req.data;
+
+  if (!exam_sessions) {
+    return libFunc.sendResponse(res, {
+      status: 1,
+      msg: "exam_sessions is required.",
+      data: [],
+    });
+  }
+
+  let whereClauses = [`${students}.exam_sessions = '${exam_sessions}'`];
+
+  if (center && center !== 0) {
+    whereClauses.push(`${students}.center = '${center}'`);
+  }
+
+  if (gender && gender !== "All") {
+    whereClauses.push(`${students}.gender = '${gender}'`);
+  }
+
+  if (from_date && to_date) {
+    whereClauses.push(`${students}.cr_on BETWEEN '${from_date}' AND '${to_date}'`);
+  }
+
+  const whereClause = whereClauses.length > 0 ? "WHERE " + whereClauses.join(" AND ") : "";
+
+  const queryStr = `
+    SELECT ${students}.student_name,
+           ${students}.father_name,
+           ${students}.address,
+           ${classes}.class_name,
+           ${students}.gender,
+           ${students}.roll_no,
+           ${students}.center,
+           ${students}.ahhar_no,
+           ${students}.mobile_no,
+           ${students}.account_no,
+           ${students}.account_name,
+           ${students}.ifsc_code,
+           ${centers}.center as center_name
+    FROM ${schema}.students
+    INNER JOIN ${centers} ON ${students}.center = ${centers}.row_id
+    INNER JOIN ${classes} ON ${students}.class_id = ${classes}.row_id
+    ${whereClause}
+  `;
+
+  const studentResp = await query.custom_query(queryStr);
+  if (!studentResp || studentResp.length === 0) {
+    return libFunc.sendResponse(res, {
+      status: 1,
+      msg: "No students found for the given filters.",
+      data: [],
+    });
+  }
+
+  return libFunc.sendResponse(res, {
+    status: 0,
+    msg: "Students fetched successfully by date and optional filters.",
+    data: studentResp,
+  });
+}
+
+
+
+
+async function fetchStudentDetails(req, res) {
+  const { exam_sessions, center, roll_no } = req.data;
+
+  if (!exam_sessions) {
+    return libFunc.sendResponse(res, {
+      status: 1,
+      msg: "exam_sessions is required.",
+      data: [],
+    });
+  }
+
+  const cond = {
+    AND: {
+      [`${students}.exam_sessions`]: exam_sessions,
+    },
+  };
+
+  if (center && center !== 0) {
+    cond.AND[`${students}.center`] = center;
+  }
+
+  if (roll_no) {
+    cond.AND[`${students}.roll_no`] = roll_no;
+  }
+
+  const parameters = {
+    tablename: students,
+    data: [
+      `${students}.student_name`,
+      `${students}.father_name`,
+      `${students}.address`,
+      `${classes}.class_name`,
+      `${students}.gender`,
+      `${students}.roll_no`,
+      `${students}.mobile_no`,
+      `${students}.center`,
+      `${centers}.center as center_name`,
+      `${examSessions}.exam_date`,
+    ],
+    cond,
+    joins: [
+      {
+        jointype: "inner",
+        tables: [
+          { tb: students, on: "center" },
+          { tb: centers, on: "row_id" },
+        ],
+      },
+      {
+        jointype: "inner",
+        tables: [
+          { tb: students, on: "class_id" },
+          { tb: classes, on: "row_id" },
+        ],
+      },
+      {
+        jointype: "inner",
+        tables: [
+          { tb: students, on: "exam_sessions" },
+          { tb: examSessions, on: "row_id" },
+        ],
+      },
+    ],
+  };
+
+  const studentResp = await query.select_query(parameters);
+  if (!studentResp || studentResp.length === 0) {
+    return libFunc.sendResponse(res, {
+      status: 1,
+      msg: "No student found for the given filters.",
+      data: [],
+    });
+  }
+
+  return libFunc.sendResponse(res, {
+    status: 0,
+    msg: "Student details fetched successfully for the admission card.",
+    data: studentResp,
+  });
+}
+
+
+
+
+
+async function fetchByBandalNo({ exam_session, bandal_no }, res) {
+  if (!exam_session) {
+    return libFunc.sendResponse(res, {
+      status: 1,
+      msg: "exam_session is required.",
+      data: [],
+    });
+  }
+
+  const cond = {
+    AND: {
+      [`${bandals}.exam_session`]: exam_session,
+    },
+  };
+
+  if (bandal_no) {
+    cond.AND[`${bandals}.bandal_no`] = bandal_no;
+  }
+
+  const parameters = {
+    tablename: bandals,
+    data: [
+      `${students}.roll_no`,
+      "bandal_no",
+      "class_name",
+      "marks",
+      `${copyCheckers}.name as copy_checker`,
+      "session_name"
+    ],
+    cond,
+    joins: [
+      {
+        jointype: "inner",
+        tables: [
+          { tb: bandals, on: "student_row_id" },
+          { tb: students, on: "row_id" },
+        ],
+      },
+      {
+        jointype: "inner",
+        tables: [
+          { tb: bandals, on: "class" },
+          { tb: classes, on: "row_id" },
+        ],
+      },
+      {
+        jointype: "inner",
+        tables: [
+          { tb: bandals, on: "copy_checker_id" },
+          { tb: copyCheckers, on: "row_id" },
+        ],
+      },
+      {
+        jointype: "inner",
+        tables: [
+          { tb: bandals, on: "student_row_id" },
+          { tb: markstable, on: "student_row_id" },
+        ],
+      },
+      {
+        jointype: "inner",
+        tables: [
+          { tb: bandals, on: "exam_session" },
+          { tb: examSessions, on: "row_id" },
+        ],
+      },
+    ],
+  };
+
+  const studentResp = await query.select_query(parameters);
+
+  return libFunc.sendResponse(res, {
+    status: 0,
+    msg: "Marks Report fetched successfully",
+    data: studentResp,
+  });
+}
+
+
+
+async function fetchByFilter({ exam_session, class_id, center, marksfrom, marksto }, res) {
+  // Validate required fields
+  if (!exam_session || marksfrom === undefined || marksto === undefined) {
+    return libFunc.sendResponse(res, {
+      status: 1,
+      msg: "exam_session, marksfrom, and marksto are required.",
+      data: [],
+    });
+  }
+
+  // Base query
+  let fetchfiltermarks = `
+    SELECT 
+      ${students}.roll_no,
+      bandal_no,
+      class_name,
+      name as copy_checker,
+      marks,
+      center_code,
+      ${centers}.center as center_name
+    FROM ${bandals}
+    INNER JOIN ${students} ON ${bandals}.student_row_id = ${students}.row_id
+    INNER JOIN ${classes} ON ${bandals}.class = ${classes}.row_id
+    INNER JOIN ${copyCheckers} ON ${bandals}.copy_checker_id = ${copyCheckers}.row_id
+    INNER JOIN ${markstable} ON ${bandals}.student_row_id = ${markstable}.student_row_id
+    INNER JOIN ${centers} ON ${centers}.row_id = ${students}.center
+    WHERE 
+      ${bandals}.exam_session = '${exam_session}'
+      AND marks BETWEEN ${marksfrom} AND ${marksto}
+  `;
+
+  // Add optional filters
+  if (center) {
+    fetchfiltermarks += ` AND ${students}.center = '${center}'`;
+  }
+
+  if (class_id) {
+    fetchfiltermarks += ` AND ${bandals}.class = '${class_id}'`;
+  }
+
+  const studentResp = await query.custom_query(fetchfiltermarks);
+
+  return libFunc.sendResponse(res, {
+    status: 0,
+    msg: "Marks Report fetched successfully",
+    data: studentResp,
+  });
+}

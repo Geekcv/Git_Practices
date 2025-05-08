@@ -1,397 +1,171 @@
-async function fetchCenterWiseStudents(req, res) {
-  try {
-    const {
-      from_date,
-      to_date,
-      exam_sessions,
-      center,
-      gender,
-      state,
-      city,
-      roll_no,
-      orderby,
-    } = req.data;
+@if(role == 0) {
+  <div class="flex min-w-0 flex-auto flex-col">
+    <!-- Main -->
+    <div class="flex-auto p-6 sm:p-10">
+      <div class="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <!-- Button Group -->
+        <div class="flex gap-3">
+          <!-- Search Field -->
+          <mat-form-field class="w-full sm:w-72" appearance="outline">
+            <mat-icon matPrefix [svgIcon]="'heroicons_solid:magnifying-glass'"></mat-icon>
+            <input
+              matInput
+              #query
+              (keyup)="applyFilter(query.value)"
+              placeholder="Search patient"
+            />
+          </mat-form-field>
 
-    // CASE 1: Filter by State or City
-    if (state || city) {
-      const orConditions = {};
-      if (exam_sessions)
-        orConditions[`${schema}.students.exam_sessions`] = exam_sessions;
-      if (state) orConditions[`${schema}.students.state`] = state;
-      if (city) orConditions[`${schema}.students.city`] = city;
+          <!-- Export Button -->
+          <button mat-flat-button color="primary" (click)="exportToExcel()">
+            <mat-icon [svgIcon]="'heroicons_solid:arrow-up-tray'"></mat-icon>
+            <span class="ml-2">Export</span>
+          </button>
 
-      const parameters = {
-        tablename: students,
-        data: [
-          `${students}.student_name`,
-          `${students}.father_name`,
-          `${students}.state`,
-          `${students}.city`,
-          `${students}.roll_no`,
-          `${classes}.class_name`,
-        ],
-        cond: Object.keys(orConditions).length ? { AND: orConditions } : null,
-        joins: [
-          {
-            jointype: "inner",
-            tables: [
-              { tb: students, on: "center" },
-              { tb: centers, on: "row_id" },
-            ],
-          },
-          {
-            jointype: "inner",
-            tables: [
-              { tb: students, on: "class_id" },
-              { tb: classes, on: "row_id" },
-            ],
-          },
-        ],
-      };
+          <!-- Refresh Button -->
+          <button mat-icon-button (click)="refresh()">
+            <mat-icon>refresh</mat-icon>
+          </button>
 
-      const studentResp = await query.select_query(parameters);
+          <!-- Add Patient Button -->
+          <button mat-icon-button (click)="addpatientdialog()">
+            <mat-icon>control_point</mat-icon>
+          </button>
+        </div>
+      </div>
 
-      if (!studentResp?.length) {
-        return libFunc.sendResponse(res, {
-          status: 1,
-          msg: "No students found for the given state/city filters.",
-          data: [],
-        });
-      }
+      <div class="bg-white shadow-lg rounded-2xl border border-gray-300 p-4" style="width: 1500px;">
+        <h2 class="text-lg sm:text-2xl font-bold text-gray-700 mb-4">All Patients</h2>
 
-      return libFunc.sendResponse(res, {
-        status: 0,
-        msg: "Students filtered by state or city fetched successfully.",
-        data: studentResp,
-      });
-    }
+        <div class="overflow-auto rounded-lg">
+          <table mat-table [dataSource]="patient" class="mat-elevation-z8 w-full min-w-[600px]" matSort>
 
-    // CASE 2: Filter by Roll Number
-    else if (roll_no) {
-      const cond = {
-        AND: {
-          [`${students}.exam_sessions`]: exam_sessions,
-          [`${students}.center`]: center,
-          [`${students}.roll_no`]: roll_no,
-        },
-      };
+            <!-- Columns -->
+            <ng-container matColumnDef="user_row_id">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header class="text-left">ID</th>
+              <td mat-cell *matCellDef="let row; let i = index;">{{ i + 1 }}</td>
+            </ng-container>
 
-      const parameters = {
-        tablename: students,
-        data: [
-          `${students}.student_name`,
-          `${students}.father_name`,
-          `${students}.address`,
-          `${classes}.class_name`,
-          `${students}.gender`,
-          `${students}.roll_no`,
-          `${students}.center`,
-          `${centers}.center as center_name`,
-          `${examSessions}.exam_date`,
-        ],
-        cond: cond,
-        joins: [
-          {
-            jointype: "inner",
-            tables: [
-              { tb: students, on: "center" },
-              { tb: centers, on: "row_id" },
-            ],
-          },
-          {
-            jointype: "inner",
-            tables: [
-              { tb: students, on: "class_id" },
-              { tb: classes, on: "row_id" },
-            ],
-          },
-          {
-            jointype: "inner",
-            tables: [
-              { tb: students, on: "exam_sessions" },
-              { tb: examSessions, on: "row_id" },
-            ],
-          },
-        ],
-      };
+            <ng-container matColumnDef="patient_name">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header class="text-left">Patient Name</th>
+              <td mat-cell *matCellDef="let row">{{ row.patient_name }}</td>
+            </ng-container>
 
-      const studentResp = await query.select_query(parameters);
+            <ng-container matColumnDef="patient_email">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header class="text-left">Patient Email</th>
+              <td mat-cell *matCellDef="let row">{{ row.patient_email }}</td>
+            </ng-container>
 
-      if (!studentResp?.length) {
-        return libFunc.sendResponse(res, {
-          status: 1,
-          msg: "No student found for the given roll number.",
-          data: [],
-        });
-      }
+            <ng-container matColumnDef="patient_contact">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header class="text-left">Contact</th>
+              <td mat-cell *matCellDef="let row">{{ row.patient_contact }}</td>
+            </ng-container>
 
-      return libFunc.sendResponse(res, {
-        status: 0,
-        msg: "Student details fetched successfully for the admission card.",
-        data: studentResp,
-      });
-    }
+            <ng-container matColumnDef="patient_gender">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header class="text-left">Gender</th>
+              <td mat-cell *matCellDef="let row">{{ row.patient_gender }}</td>
+            </ng-container>
 
-    // CASE 3: Ordered Result
-    else if (orderby) {
-      let orderClause = { [`${students}.roll_no`]: "asc" };
+            <ng-container matColumnDef="patient_age">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header class="text-left">Age</th>
+              <td mat-cell *matCellDef="let row">{{ row.patient_age }}</td>
+            </ng-container>
 
-      if (orderby === "name") {
-        orderClause = {
-          [`${students}.student_name`]: "asc",
-          [`${classes}.class_name`]: "asc",
-        };
-      } else if (orderby === "roll_no") {
-        orderClause = {
-          [`${students}.roll_no`]: "asc",
-          [`${classes}.class_name`]: "asc",
-        };
-      } else if (orderby === "both") {
-        orderClause = {
-          [`${students}.roll_no`]: "asc",
-          [`${students}.student_name`]: "asc",
-        };
-      }
+            <ng-container matColumnDef="doctor_name">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header class="text-left">Doctor Name</th>
+              <td mat-cell *matCellDef="let row">{{ row.doctor_name }}</td>
+            </ng-container>
 
-      const cond = {
-        AND: {
-          [`${students}.exam_sessions`]: exam_sessions,
-          [`${students}.center`]: center,
-        },
-      };
+            <ng-container matColumnDef="doctor_type">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header class="text-left">Doctor Type</th>
+              <td mat-cell *matCellDef="let row">{{ row.doctor_type }}</td>
+            </ng-container>
 
-      if (gender) cond.AND[`${students}.gender`] = gender;
+            <ng-container matColumnDef="doctor_email">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header class="text-left">Doctor Email</th>
+              <td mat-cell *matCellDef="let row">{{ row.doctor_email }}</td>
+            </ng-container>
 
-      const parameters = {
-        tablename: students,
-        data: [
-          `${students}.student_name`,
-          `${students}.father_name`,
-          `${students}.address`,
-          `${classes}.class_name`,
-          `${students}.gender`,
-          `${students}.roll_no`,
-          `${students}.center`,
-          `${centers}.center as center_name`,
-        ],
-        cond: cond,
-        orderby: orderClause,
-        joins: [
-          {
-            jointype: "inner",
-            tables: [
-              { tb: students, on: "center" },
-              { tb: centers, on: "row_id" },
-            ],
-          },
-          {
-            jointype: "inner",
-            tables: [
-              { tb: students, on: "class_id" },
-              { tb: classes, on: "row_id" },
-            ],
-          },
-        ],
-      };
+            <ng-container matColumnDef="doctor_gender">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header class="text-left">Doctor Gender</th>
+              <td mat-cell *matCellDef="let row">{{ row.doctor_gender }}</td>
+            </ng-container>
 
-      const studentResp = await query.select_query(parameters);
+            <!-- Actions -->
+            <ng-container matColumnDef="actions" stickyEnd>
+              <th mat-header-cell *matHeaderCellDef class="sticky-column">Actions</th>
+              <td mat-cell *matCellDef="let row" class="sticky-column">
+                <div class="action-buttons">
+                  <button mat-icon-button color="primary" (click)="viewpatientDetails(row.user_row_id)">
+                    <mat-icon>visibility</mat-icon>
+                  </button>
+                  <button mat-icon-button color="warn" (click)="deletebtn(row.user_row_id)">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </div>
+              </td>
+            </ng-container>
 
-      if (!studentResp?.length) {
-        return libFunc.sendResponse(res, {
-          status: 1,
-          msg: "No students found for the given ordering filters.",
-          data: [],
-        });
-      }
+            <!-- Table Header & Rows -->
+            <tr mat-header-row *matHeaderRowDef="displayedColumns" class="text-sm md:text-lg font-bold bg-gray-200"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="hover:bg-blue-100 transition cursor-pointer"></tr>
+          </table>
+        </div>
 
-      const countResp = await query.select_query({
-        tablename: students,
-        data: ["COUNT(*) AS total_students"],
-        cond: cond,
-      });
+        <!-- Paginator -->
+        @if(!isSearchActive) {
+          <div class="flex flex-col sm:flex-row justify-between items-center mt-4 border-t pt-4 gap-2">
+            <span class="text-xs sm:text-sm text-gray-500">Showing {{ patient.data.length }} patients</span>
+            <mat-paginator [pageSize]="10" [pageSizeOptions]="[5, 10, 20, 30, 40]" showFirstLastButtons>
+            </mat-paginator>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+}
 
-      return libFunc.sendResponse(res, {
-        status: 0,
-        msg: "Ordered students fetched successfully.",
-        total_students: countResp[0]?.total_students || 0,
-        data: studentResp,
-      });
-    }
 
-    // CASE 4: Default Case - Date Filter or Gender
-    else {
-      const queryStr = `
-        SELECT 
-          ${schema}.students.student_name,
-          ${schema}.students.father_name,
-          ${schema}.students.address,
-          ${schema}.classes.class_name,
-          ${schema}.students.gender,
-          ${schema}.students.roll_no,
-          ${schema}.students.center,
-          ${schema}.centers.center AS center_name
-        FROM ${schema}.students
-        INNER JOIN ${schema}.centers ON ${schema}.students.center = ${schema}.centers.row_id
-        INNER JOIN ${schema}.classes ON ${schema}.students.class_id = ${schema}.classes.row_id
-        WHERE 
-          ${schema}.students.exam_sessions = '${exam_sessions}' AND 
-          ${schema}.students.center = '${center}' AND 
-          ${schema}.students.gender = '${gender}' AND
-          ${schema}.students.cr_on BETWEEN '${from_date}' AND '${to_date}';
-      `;
 
-      const studentResp = await query.custom_query(queryStr);
 
-      if (!studentResp?.length) {
-        return libFunc.sendResponse(res, {
-          status: 1,
-          msg: "No students found for the given date and gender filters.",
-          data: [],
-        });
-      }
+import { MatTableDataSource } from '@angular/material/table';
+import { MatPaginator } from '@angular/material/paginator';
+import { MatSort } from '@angular/material/sort';
+import { ViewChild, AfterViewInit } from '@angular/core';
 
-      return libFunc.sendResponse(res, {
-        status: 0,
-        msg: "Students filtered by date and gender fetched successfully.",
-        data: studentResp,
-      });
-    }
-  } catch (error) {
-    console.error("Error fetching center-wise students:", error);
-    return libFunc.sendResponse(res, {
-      status: 1,
-      msg: "Unexpected error occurred while fetching student records.",
-      error: error.message,
-    });
+export class YourComponent implements AfterViewInit {
+  displayedColumns: string[] = [
+    'user_row_id', 'patient_name', 'patient_email', 'patient_contact',
+    'patient_gender', 'patient_age', 'doctor_name', 'doctor_type',
+    'doctor_email', 'doctor_gender', 'actions'
+  ];
+  patient = new MatTableDataSource<any>([]);
+
+  @ViewChild(MatPaginator) paginator: MatPaginator;
+  @ViewChild(MatSort) sort: MatSort;
+
+  ngAfterViewInit() {
+    this.patient.paginator = this.paginator;
+    this.patient.sort = this.sort;
+  }
+
+  applyFilter(filterValue: string) {
+    this.patient.filter = filterValue.trim().toLowerCase();
   }
 }
 
 
-async function fetchStudentMarksReports(req, res) {
-  try {
-    const { exam_session, bandal_no, class_id, center, marksfrom, marksto } = req.data;
-
-    // Validate required fields
-    if (!exam_session) {
-      return libFunc.sendResponse(res, {
-        status: 1,
-        msg: "Missing required field: exam_session",
-      });
-    }
-
-    let studentResp;
-
-    // If bandal_no is provided, fetch by bandal_no
-    if (bandal_no) {
-      const cond = {
-        AND: {
-          [`${bandals}.exam_session`]: exam_session,
-          [`${bandals}.bandal_no`]: bandal_no,
-        },
-      };
-
-      const parameters = {
-        tablename: bandals,
-        data: [
-          `${students}.roll_no`,
-          "bandal_no",
-          "class_name",
-          "marks",
-          `${copyCheckers}.name as copy_checker`,
-        ],
-        cond: cond,
-        joins: [
-          {
-            jointype: "inner",
-            tables: [
-              { tb: bandals, on: "student_row_id" },
-              { tb: students, on: "row_id" },
-            ],
-          },
-          {
-            jointype: "inner",
-            tables: [
-              { tb: bandals, on: "class" },
-              { tb: classes, on: "row_id" },
-            ],
-          },
-          {
-            jointype: "inner",
-            tables: [
-              { tb: bandals, on: "copy_checker_id" },
-              { tb: copyCheckers, on: "row_id" },
-            ],
-          },
-          {
-            jointype: "inner",
-            tables: [
-              { tb: bandals, on: "student_row_id" },
-              { tb: markstable, on: "student_row_id" },
-            ],
-          },
-        ],
-      };
-
-      studentResp = await query.select_query(parameters);
-    } 
-    // Else fetch by filter range
-    else {
-      // Validate required filters
-      if (!center || !class_id || marksfrom === undefined || marksto === undefined) {
-        return libFunc.sendResponse(res, {
-          status: 1,
-          msg: "Missing required fields for marks range filtering: center, class_id, marksfrom, marksto",
-        });
-      }
-
-      const fetchFilterMarks = `
-        SELECT 
-          ${students}.roll_no,
-          bandal_no,
-          class_name,
-          ${copyCheckers}.name as copy_checker,
-          marks
-        FROM ${bandals}
-        INNER JOIN ${students} ON ${bandals}.student_row_id = ${students}.row_id
-        INNER JOIN ${classes} ON ${bandals}.class = ${classes}.row_id
-        INNER JOIN ${copyCheckers} ON ${bandals}.copy_checker_id = ${copyCheckers}.row_id
-        INNER JOIN ${markstable} ON ${bandals}.student_row_id = ${markstable}.student_row_id
-        INNER JOIN ${centers} ON ${students}.center = ${centers}.row_id
-        WHERE 
-          ${bandals}.exam_session = '${exam_session}'
-          AND ${students}.center = '${center}'
-          AND ${bandals}.class = '${class_id}'
-          AND marks BETWEEN ${marksfrom} AND ${marksto};
-      `;
-
-      studentResp = await query.custom_query(fetchFilterMarks);
-    }
-
-    if (!studentResp || studentResp.length === 0) {
-      return libFunc.sendResponse(res, {
-        status: 1,
-        msg: "No student marks found with the given filters.",
-        data: [],
-      });
-    }
-
-    const resp = {
-      status: 0,
-      msg: "Student marks report fetched successfully.",
-      data: studentResp,
-    };
-
-    console.log("Marks Report:", resp);
-    libFunc.sendResponse(res, resp);
-
-  } catch (error) {
-    console.error("Error fetching student marks report:", error);
-    libFunc.sendResponse(res, {
-      status: 1,
-      msg: "An unexpected error occurred while fetching student marks report.",
-      error: error.message,
-    });
-  }
-}
-
-
+<!-- Actions -->
+<ng-container matColumnDef="actions" stickyEnd>
+  <th mat-header-cell *matHeaderCellDef class="sticky-column border-l border-gray-300">Actions</th>
+  <td mat-cell *matCellDef="let row" class="sticky-column border-l border-gray-200">
+    <div class="action-buttons flex gap-2">
+      <button mat-icon-button color="primary" (click)="viewpatientDetails(row.user_row_id)">
+        <mat-icon>visibility</mat-icon>
+      </button>
+      <button mat-icon-button color="warn" (click)="deletebtn(row.user_row_id)">
+        <mat-icon>delete</mat-icon>
+      </button>
+    </div>
+  </td>
+</ng-container>
